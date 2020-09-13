@@ -91,6 +91,32 @@ parser.add_argument('--profile', action='store_true',
 # args = parser.parse_args()
 
 
+from copy import deepcopy
+def get_grounded_obj(q, scene):
+  q_graph = q
+  vertex_idx = len(q_graph) - 1  # last item's idx
+  from collections import deque
+  queue = deque([q_graph[vertex_idx]])
+  visited = {vertex_idx: True}
+  grounded = []
+  while queue:
+    v = queue.popleft()
+    if type(v['_output']) != list:
+      neighbors = v['inputs']
+      for n in neighbors:
+        if n not in visited:
+          queue.append(q_graph[n])
+          visited[n] = True
+    else:
+      grounded.append(v['_output'])
+
+  obj_idx = [j for i in grounded for j in i]
+  objects = [scene['objects'][i] for i in obj_idx]
+  d = dict(zip(obj_idx, objects))
+
+  return [d, grounded]
+
+
 def precompute_filter_options(scene_struct, metadata):
   # Keys are tuples (size, color, shape, material) (where some may be None)
   # and values are lists of object idxs that match the filter criterion
@@ -635,6 +661,8 @@ def main(args):
         print('that took ', toc - tic)
       image_index = int(os.path.splitext(scene_fn)[0].split('_')[-1])
       for t, q, a in zip(ts, qs, ans):
+        grounded = get_grounded_obj(q, scene) #if a not in ["No", 0] else -1
+
         questions.append({
           'split': scene_info['split'],
           'image_filename': scene_fn,
@@ -646,6 +674,8 @@ def main(args):
           'template_filename': fn,
           'question_family_index': idx,
           'question_index': len(questions),
+          'grounded_objects': grounded
+
         })
       if len(ts) > 0:
         if args.verbose:
